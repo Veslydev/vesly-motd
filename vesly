@@ -1,0 +1,506 @@
+#!/usr/bin/env python3
+"""Vesly Cloud Labs SSH welcome screen. Manual command only."""
+import argparse, datetime, getpass, os, platform, random, re, shutil, socket, subprocess, sys, time
+
+LOGO = r"""
+                            .        .+##+..
+                                   .#@@@@@@#+#.
+         .                        .@@@@@@@@@@@@.
+             .                    +@@@@@@@@@@@@#
+                                  #@@@@@@@@@@@@+
+                                  @@@@@@@@@@@@#.
+       ....+..                    #@@@@@@@@@@@+
+    ...+#@@@@@#+.                 #@@@@@@@@@@#
+    ..+#@@@@@@@@@#               .@@@@@@@@@@@+.
+       #@@@@@@@@@@+              .@@@@@@@@@@@.
+       #@@@@@@@@@@@+             +@@@@@@@@@@@.
+        +@@@@@@@@@@@+            #@@@@@@@@@@#+
+         +@@@@@@@@@@@.           @@@@@@@@@@+ .
+         +#@@@@@@@@@@@#+         @@@@@@@@@@.
+           .#@@@@@@@@@@+         @@@@@@@@@@
+             +@@@@@@@@@+         @@@@@@@@@+
+       +#@#.  +@@@@@@@@@.       .@@@@@@@@@.
+      +@@@@@+  +@@@@@@@@#       .@@@@@@@@@
+      #@@@@@@+  +@@@@@@@@#      .@@@@@@@@@
+       #@@@@@@+  +@@@@@@@@.     +@@@@@@@@#
+ +##++  #@@@@@@.  .@@@@@@@@     .@@@@@@@@+
+#@@@@@@+ #@@@@@#   .@@@@@@@#    +@@@@@@@@.
++@@@@@@@+ #@@@@@+   .@@@@@@@+  .#@@@@@@@@
+ +@@@@@@@+ +@@@@@.   +@@@@@@@+.+#@@@@@@@#
+  .#@@@@@@+ .#@@@#    +@@@@@@@. @@@@@@@@#  +..+++.
+    +@@@@@@+  #@@@+    #@@@@@@@.@@@@@@@@+. #@@@@@@#
+     .#@@@@@+  #@@+     @@@@@@@@@@@@@@@@+.+@@@@@@@@+
+       .#@@@@.   .      .@@@@@@@@@@@@@@@+ #@@@@@@@@#
+         +@@@@.          +@@@@@@@@@@@@@@. .#@@@@@@+
+          .+##.           #@@@@@@@@@@@@@    .++@#
+                          +@@@@@@@@@@@@#      .@+
+                          .#@@@@@@@@@@@#      .@+
+                          . #@@@@@@@@@@#       #+
+                            .@@@@@@@@@@#
+                             #@@@@@@@@@@
+                             .@@@@@@@@@#
+                              +@@@@@@@#
+                                ++@@##.
+                                  #@+.
+                                  #@.
+                                  +@+
+                                  .@#
+""".strip("\n").splitlines()
+A = argparse.ArgumentParser(description="Vesly Cloud Labs terminal welcome")
+A.add_argument("--no-clear", action="store_true")
+A.add_argument("--plain", action="store_true")
+A.add_argument("--color", action="store_true")
+A.add_argument("--full", action="store_true", help="show the original, uncompressed logo and full statistics")
+opts = A.parse_args()
+USE_COLOR = (sys.stdout.isatty() or opts.color) and not opts.plain and "NO_COLOR" not in os.environ
+PURPLE_DARK=(125,66,246)     # #7D42F6
+PURPLE_LIGHT=(209,156,255)  # #D19CFF
+CYAN=PURPLE_LIGHT
+LAV=(170,112,250)
+PINK=PURPLE_LIGHT
+FAINT=(143,120,178)
+WHITE=(233,224,247)
+GREEN=PURPLE_LIGHT
+GREY=(85,62,122)
+AMBER=(241,199,133)  # retain critical resource warning contrast
+STRIP=re.compile(r"\x1b\[[0-9;]*m")
+
+def color(rgb):
+    return "\033[38;2;%d;%d;%dm" % rgb if USE_COLOR else ""
+def reset():
+    return "\033[0m" if USE_COLOR else ""
+def p(text, rgb):
+    return color(rgb)+str(text)+reset() if USE_COLOR else str(text)
+def visible(s):
+    return len(STRIP.sub("",s))
+def padded(s,n):
+    return s+" "*max(0,n-visible(s))
+def short(s,n=37):
+    s=str(s)
+    return s if len(s)<=n else s[:n-1]+"…"
+def grad(t):
+    t=max(0,min(1,t))
+    return tuple(round(x+(y-x)*t) for x,y in zip(PURPLE_DARK,PURPLE_LIGHT))
+def call(*cmd,timeout=2):
+    try:
+        return subprocess.run(cmd,capture_output=True,text=True,timeout=timeout,check=False).stdout.strip()
+    except (OSError,subprocess.TimeoutExpired):
+        return ""
+def read(path):
+    try:
+        with open(path,encoding="utf-8",errors="replace") as f: return f.read()
+    except OSError: return ""
+def sized(n):
+    n=float(n)
+    for unit in ("B","KiB","MiB","GiB","TiB","PiB"):
+        if abs(n)<1024 or unit=="PiB":
+            return ("%0.0f" if unit=="B" else "%0.2f")%n+" "+unit
+        n/=1024
+    return "n/a"
+def info_mem():
+    result={}
+    for row in read("/proc/meminfo").splitlines():
+        try:
+            key,value=row.split(":",1)
+            result[key]=int(value.strip().split()[0])*1024
+        except (ValueError,IndexError): pass
+    return result
+def get_uptime():
+    try: seconds=int(float(read("/proc/uptime").split()[0]))
+    except (ValueError,IndexError): return "n/a"
+    days,rem=divmod(seconds,86400)
+    hrs,rem=divmod(rem,3600)
+    return (str(days)+"d " if days else "")+f"{hrs:02d}h {rem//60:02d}m"
+def measure_cpu():
+    def sample():
+        try:
+            n=[int(x) for x in read("/proc/stat").splitlines()[0].split()[1:]]
+            return sum(n),sum(n[3:5])
+        except (ValueError,IndexError): return 0,0
+    t1,i1=sample()
+    time.sleep(.12)
+    t2,i2=sample()
+    return round(100*(1-(i2-i1)/(t2-t1))) if t2>t1 else 0
+def disks():
+    rows=[("/","/")]
+    root_source=None
+    for line in read("/proc/mounts").splitlines():
+        x=line.split()
+        if len(x)>2 and x[1]=="/": root_source=x[0]
+    for line in read("/proc/mounts").splitlines():
+        x=line.split()
+        if len(x)<3: continue
+        src,mount=x[0],x[1].replace("\\040"," ")
+        if src.startswith("/dev/") and not src.startswith("/dev/loop") and src!=root_source and mount!="/" and mount.startswith(("/srv","/data","/tank","/home","/mnt","/media","/var/lib/pterodactyl","/var/lib/docker")):
+            rows.append((mount,src))
+    rows=[rows[0]]+sorted(rows[1:],key=lambda r:(not r[0].startswith(("/srv","/data","/tank","/home","/mnt","/media")),r[0]))
+    result=[]
+    seen=set()
+    for mount,_ in rows:
+        try:
+            stat=os.stat(mount)
+            if stat.st_dev in seen: continue
+            usage=shutil.disk_usage(mount)
+            if not usage.total: continue
+            seen.add(stat.st_dev)
+            result.append((mount,usage.used,usage.total))
+        except OSError: pass
+        if len(result)==3: break
+    return result
+def net():
+    route=call("ip","-4","route","get","1.1.1.1")
+    match_ip=re.search(r"\bsrc\s+(\d+\.\d+\.\d+\.\d+)",route)
+    match_dev=re.search(r"\bdev\s+(\S+)",route)
+    ip=match_ip.group(1) if match_ip else "n/a"
+    dev=match_dev.group(1) if match_dev else "n/a"
+    if ip=="n/a":
+        for line in call("ip","-o","-4","addr","show","scope","global").splitlines():
+            if "tailscale" in line.lower(): continue
+            a=re.search(r"\binet\s+(\d+\.\d+\.\d+\.\d+)",line)
+            if a: ip=a.group(1); break
+    ts=call("tailscale","ip","-4",timeout=3)
+    return ip,ts.splitlines()[0] if ts else "not connected",dev
+def graph(used,total,length=27):
+    frac=max(0,min(1,used/total)) if total else 0
+    full=round(frac*length)
+    bar="".join(p("━",grad(i/max(length-1,1))) if i<full else p("─",GREY) for i in range(length))
+    if total<=0:
+        return "  "+bar
+    return "  "+bar+p("  %d%%"%round(frac*100),AMBER if frac>=.85 else FAINT)
+def details():
+    host=socket.gethostname()
+    pretty=call("hostnamectl","--pretty") or host
+    user=getpass.getuser()
+    os_data=read("/etc/os-release")
+    mo=re.search(r'^PRETTY_NAME="?([^"\n]+)"?$',os_data,re.M)
+    distro=mo.group(1) if mo else platform.system()
+    cdata=read("/proc/cpuinfo")
+    cpu=re.search(r"^model name\s*:\s*(.+)$",cdata,re.M)
+    mhz=re.search(r"^cpu MHz\s*:\s*(.+)$",cdata,re.M)
+    cpu_name=re.sub(r"\s+"," ",cpu.group(1).replace("(R)","").replace("(TM)","")).strip() if cpu else "n/a"
+    clock="%.2f GHz"%(float(mhz.group(1))/1000) if mhz else "n/a"
+    mem=info_mem()
+    total=mem.get("MemTotal",0)
+    used=max(0,total-mem.get("MemAvailable",total))
+    swap=mem.get("SwapTotal",0)
+    used_swap=max(0,swap-mem.get("SwapFree",swap))
+    ip,ts,iface=net()
+    package_out=call("dpkg-query","-W",timeout=6)
+    try: load=" / ".join("%.2f"%x for x in os.getloadavg())
+    except OSError: load="n/a"
+    virtual=call("systemd-detect-virt") or "unknown"
+    processes=len([x for x in os.listdir("/proc") if x.isdigit()])
+    tty=os.environ.get("SSH_TTY") or (os.ttyname(0) if os.isatty(0) else "n/a")
+    src=os.environ.get("SSH_CONNECTION","").split()
+    peer=src[0] if src else "local session"
+    lines=[]
+    def row(s=""): lines.append(s)
+    def heading(s): row(p(s.upper(),CYAN))
+    def val(k,v,shade=WHITE): row(p("  %-13s"%short(k,13),LAV)+p(short(v,35),shade))
+    def meter(k,v,n):
+        val(k,(sized(v)+" / "+sized(n)) if n else "disabled")
+        row(graph(v,n))
+    row(p(user+"@"+host,PINK))
+    row(p("─"*48,LAV))
+    row()
+    heading("System")
+    val("OS",distro)
+    val("Node",pretty)
+    val("Kernel",platform.release())
+    val("Uptime",get_uptime())
+    val("Packages",str(len(package_out.splitlines()))+" (dpkg)" if package_out else "n/a")
+    val("Shell",os.path.basename(os.environ.get("SHELL","unknown")))
+    val("Terminal",tty)
+    row()
+    heading("Compute")
+    val("CPU",cpu_name)
+    val("vCPU",os.cpu_count() or 1)
+    val("Clock",clock)
+    val("CPU Usage",str(measure_cpu())+"%")
+    val("Load Avg",load)
+    val("Processes",processes)
+    val("Hypervisor",virtual)
+    row()
+    heading("Resources")
+    meter("Memory",used,total)
+    meter("Swap",used_swap,swap)
+    for path,u,t in disks():
+        meter("Disk "+short(path,8),u,t)
+    row()
+    heading("Network")
+    val("Local IP",ip,CYAN)
+    val("Tailscale IP",ts,CYAN)
+    val("Interface",iface)
+    row()
+    heading("Session")
+    val("Current user",user)
+    val("SSH peer",peer)
+    val("Sessions",len(call("who").splitlines()))
+    val("Locale",os.environ.get("LANG","n/a"))
+    val("Timezone",datetime.datetime.now().astimezone().tzname())
+    val("System time",datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    row()
+    row("  "+"".join(p("━━━",c) for c in (GREY,PURPLE_DARK,(145,85,248),LAV,PURPLE_LIGHT,(192,140,254),PURPLE_DARK,WHITE)))
+    return lines,pretty
+def render_art(w,h):
+    figw=max(map(len,LOGO))
+    if figw>w: return [p("Increase terminal width to view ASCII logo.",FAINT)]
+    ox=(w-figw)//2
+    oy=max(0,(h-len(LOGO))//2)
+    rand=random.SystemRandom()
+    out=[]
+    for y in range(h):
+        fy=y-oy
+        line=LOGO[fy] if 0<=fy<len(LOGO) else ""
+        occupied=[i for i,x in enumerate(line) if x!=" "]
+        lo=min(occupied) if occupied else None
+        hi=max(occupied) if occupied else None
+        chars=[]
+        prev=None
+        for x in range(w):
+            fx=x-ox
+            char=line[fx] if 0<=fx<len(line) else " "
+            restricted=lo is not None and lo-3<=fx<=hi+3
+            rgb=None
+            if char!=" ":
+                t=(fy/max(1,len(LOGO)-1)+(max(0,fx)/max(1,figw))*.25)/1.25
+                rgb=grad(t)
+            elif not restricted and rand.random()<(.12 if y%8==0 else .075):
+                char=rand.choices([".","*","+"],weights=[80,18,2])[0]
+                rgb=FAINT if char=="." else LAV
+            if USE_COLOR and prev!=rgb:
+                chars.append(color(rgb) if rgb else reset())
+                prev=rgb
+            chars.append(char)
+        out.append("".join(chars)+(reset() if USE_COLOR else ""))
+    return out
+def notice(pretty,cols):
+    n=min(79,max(35,cols-2))
+    def line(text=""):
+        return p("│ ",LAV)+padded(text,n-2)+p(" │",LAV)
+    return [
+        p("┌"+"─"*n+"┐",LAV),
+        line(p("! SYSTEM ACCESS NOTICE !",PINK)),
+        p("├"+"─"*n+"┤",LAV),
+        line(),
+        line(p("Internal access - Vesly Cloud Labs infrastructure",LAV)),
+        line("This machine is maintained by Vesly Cloud Labs."),
+        line(),
+        line(p("Node: ",CYAN)+short(pretty,65)),
+        line(p("Access: ",CYAN)+"authenticated personnel only"),
+        line(),
+        line("- Experimental services. Predictable consequences."),
+        line("- Changes belong in version control, not in memory."),
+        line("- Credentials are secrets, not shell arguments."),
+        line("- Trust boundaries exist for a reason."),
+        line(),
+        line(p("Security contact: ",CYAN)+p("security@vesly.dev",PINK)),
+        line(),
+        p("└"+"─"*n+"┘",LAV),
+    ]
+def main():
+    if sys.stdout.isatty() and not opts.no_clear: sys.stdout.write("\033[2J\033[H")
+    cols=shutil.get_terminal_size(fallback=(140,50)).columns
+    lines,pretty=details()
+    artw=79 if cols>=82 else max(35,cols-2)
+    gap=3
+    horizontal=cols>=artw+gap+48
+    art=render_art(artw,max(len(LOGO)+6,len(lines)) if horizontal else len(LOGO)+6)
+    print("\n".join(notice(pretty,cols)))
+    if horizontal:
+        for i in range(max(len(art),len(lines))):
+            left=art[i] if i<len(art) else ""
+            right=lines[i] if i<len(lines) else ""
+            print(padded(left,artw)+" "*gap+right)
+    else:
+        print("\n".join(art))
+        print()
+        print("\n".join(lines))
+    print()
+
+def compact_graph(used, total, width=26):
+    ratio=max(0.0,min(1.0,used/total)) if total else 0.0
+    fill=round(width*ratio)
+    chars=[]
+    for x in range(width):
+        if x<fill:
+            chars.append(p("━",grad(x/max(width-1,1))))
+        else:
+            chars.append(p("─",GREY))
+    track="  "+"".join(chars)
+    if total<=0:
+        return track
+    return track+p(" %d%%"%round(ratio*100), AMBER if ratio>=.85 else FAINT)
+
+
+def compact_info(width):
+    hostname=socket.gethostname()
+    username=getpass.getuser()
+    pretty=call("hostnamectl","--pretty") or hostname
+    os_data=read("/etc/os-release")
+    os_match=re.search(r'^PRETTY_NAME="?([^"\n]+)"?$',os_data,re.M)
+    distro=os_match.group(1) if os_match else platform.system()
+    cpu_data=read("/proc/cpuinfo")
+    cpu_match=re.search(r"^model name\s*:\s*(.+)$",cpu_data,re.M)
+    cpu_name=re.sub(r"\s+"," ",cpu_match.group(1).replace("(R)","").replace("(TM)","")).strip() if cpu_match else "unknown"
+    memory=info_mem()
+    mem_total=memory.get("MemTotal",0)
+    mem_used=max(0,mem_total-memory.get("MemAvailable",mem_total))
+    swap_total=memory.get("SwapTotal",0)
+    swap_used=max(0,swap_total-memory.get("SwapFree",swap_total))
+    ip,tail_ip,dev=net()
+    ssh=os.environ.get("SSH_CONNECTION","").split()
+    peer=ssh[0] if ssh else "local"
+    try:
+        loads=os.getloadavg()
+    except OSError:
+        loads=[0,0,0]
+    packages=call("dpkg-query","-W",timeout=5)
+    pkg_count=len(packages.splitlines()) if packages else "?"
+    now=datetime.datetime.now().astimezone()
+    rows=[]
+    def value(key, val, rgb=WHITE):
+        key_width=10
+        rows.append(p(("%-"+str(key_width)+"s")%key,LAV)+p(short(str(val),max(1,width-key_width)),rgb))
+    def bar(title,used,total):
+        text=(sized(used)+" / "+sized(total)) if total else "disabled"
+        value(title,text)
+        rows.append(compact_graph(used,total,min(27,max(12,width-9))))
+    rows.append(p(short(username+"@"+hostname,width),PINK))
+    value("OS",distro)
+    value("Node",pretty+"   Up "+get_uptime())
+    value("Kernel",platform.release())
+    value("CPU",cpu_name)
+    value("Compute",f"{os.cpu_count() or 1} vCPU · {measure_cpu()}% · L {loads[0]:.2f}")
+    value("Runtime",f"{len([x for x in os.listdir('/proc') if x.isdigit()])} procs · {call('systemd-detect-virt') or 'host'}")
+    bar("Memory",mem_used,mem_total)
+    bar("Swap",swap_used,swap_total)
+    for diskpath,used,total in disks()[:2]:
+        bar("Disk "+short(diskpath,5),used,total)
+    value("Local IP",ip,CYAN)
+    value("Tailscale",tail_ip,CYAN)
+    value("Network",dev+" · SSH "+peer)
+    value("Packages",str(pkg_count)+" · shell "+os.path.basename(os.environ.get("SHELL","unknown")))
+    value("Time",now.strftime("%H:%M:%S")+" "+str(now.tzname()))
+    rows.append("  "+"".join(p("━━",c) for c in (GREY,PURPLE_DARK,(145,85,248),LAV,PURPLE_LIGHT,(192,140,254),PURPLE_DARK,WHITE)))
+    return rows,pretty
+
+
+
+# Encoded image-derived Vesly logo masks. Standard Python only.
+IMAGE_LOGO_WIDE='c-rmQ;R?bq3<Ti2_kU?Yhiq%oLUX4C-LE0!^XOtt2mH!Ky4>ewgz13|vAfG`0sm!jYh;yGIWI2BJl9X;;%fS2c9hvgPH9p}XCG@rEB1_-7RZcORI<<cWSCYXVMLq0MShhU<fC>BU6tR(COP_Vk;yR0yxz*5U>Le0a~iq=Up%3F>xu!B$-JMX%5oZ7D^J>67Fsig9(U2V6{nc<44ug=^+&uMo2TzQ^eA&bbTA`CTh&JBMBaUtlc}rPfD5_Oe{;I@W@aU$^ov<ckfQT(G@EJ;-W_FpR@T$n%&@&qYbm3(47h06Xt-#=M8hScq1-ZbKl%ID15(EYT>'
+IMAGE_LOGO_NARROW='c-rmOK@NZ*3<SXL|37VFqEzXjyHtV+oH%q+C{Q(9aR88^W&xFM*@uQQnL?M)B?=^1iJ8)dCD;Nr30hhtxtpqV1W`hjXP678&P10OkS?CQ2=0OB;Jr{*wmmxWvFvHOKtWQjWh$~Q@tVWcnoA0oI+rw(NW7I-UrBDaYhDF1QQxQya-ZHu7hGOijkHP9{v}P9`VTdGj$77@1Iir&mH'
+IMAGE_LOGO_FULL='c-pO2S7;Pb6us}gnT<)*6p6`VVFN4J5gQQ|1xqXt{jz*mK+q5ILqGgcRIng6R0tB1sGz7|RO~541raMoAyz~sYE)v2C|l;uyWTgm8&?#ZVfVs(%)mQy&MoIY0Pi8_=}iw~4AKt{p&iYy4=yT#Oaz17ok(FHZrB+BmNvIBh?Z1R6668Seehua$c_P9R9v$|8JD+(S9UD<Uqk%Kj$K9Rz@aUt8Q$6P;+`y6;IK?($7;}W+2O51&OGM3WYmzE)vX<$?(MID)PxH-lz_8i<=Nb8`NHMn&$ycK%1{tp-x+Ih#oE}?BjBU3xld$VDcg!;Bk$rzw7;Qpw5od3^j=mY>vSULaXghDaAoxhz%1hBrtYSnu4BA#GscvQw>Oc$`~a+SQ)lCeLj%B1+ktr;ZB0eV@9RrlJOQ;1oKl_r!SppvqG*0iG}&ZL<8&voWMOT5m*aPwD5k!4@T7Go-{~;{b?yh;&V;{F4=q?3gwU(R@%c1gzlXwB<G~LcXEQz^eq074o@jNpdXz)-81PnIS%qJVz1M*WktOOeLO4rdLc8W8@sy^+_<ap$;|tTLIgRY3y4vwF=y$`#s{k^P9&a_A#LJ9(Hm06?&TgL#!#c<`@UaPb59z!u+lwgs*=-umQmdU*dP<u(r(5H}*uEWPl(+_1K`Y@&JV_A24n1QM7kGyQ@}QW7pF;zq7?(f70>bUo&lawQ!o^DICjK6#zZ!xY%!Al&>mz7c_;JMW2AZ(z)cy+zOv%WUp&M+c63>ie?mQKw>;Ym7zlC5o#$-8U!7jqH@lDPir){u>!P1I-=P#_t_JGF>FgM09ick9z4mOj+n|Gb`)z!LHt}7k#(iy(`?p_?3l#Fg7p|^5j?$Jd+8!P;dWGalf=2Vk+5r0Od6~mdHrh^E=Iy!kNFS)_yX<m+Dk={*Wn`;f#eLU_9!C~_CFOlgYAY8m-D&a2V#B%^<9KINNKF!}{q@-8Z3mYV*OHN@d>_}{{0zc~_bt^L-tW5a2QqjS>?ReXHVfY%{)Eyh_eoZBoSX(ajhk(i>e(e3PnCj9~_`V?R%Z|3KM(2K_Y&F`Ul^&#kiP}hs;+YbjfvX~eB`vy7ItQecvlKj0b`3X9;u%3By#`caZ(xw2FvV6J<8LSa?=rg_49HxJE&i|AUsZ!k9{'
+def decode_pixels(code, count):
+    import base64,zlib
+    raw=zlib.decompress(base64.b85decode(code))
+    assert len(raw)==count, 'Invalid Vesly logo data'
+    return raw
+def to_braille(code, cols, rows):
+    data=decode_pixels(code,cols*rows*8)
+    dots=((0,0,1),(0,1,2),(0,2,4),(0,3,64),
+          (1,0,8),(1,1,16),(1,2,32),(1,3,128))
+    result=[]
+    for y in range(rows):
+        row=[]
+        for x in range(cols):
+            m=0
+            for dx,dy,bit in dots:
+                if data[((y*4+dy)*cols*2)+(x*2+dx)]:
+                    m|=bit
+            row.append(chr(0x2800+m) if m else ' ')
+        result.append(''.join(row))
+    return result
+def to_full_logo():
+    data=decode_pixels(IMAGE_LOGO_FULL,79*40)
+    scale='  .,:;+=*#%@'
+    mx=len(scale)-1
+    return [''.join(scale[min(mx,round(q*mx/255))] for q in data[y*79:(y+1)*79]) for y in range(40)]
+LOGO=to_full_logo()
+IMAGE_WIDE_LINES=to_braille(IMAGE_LOGO_WIDE,45,20)
+IMAGE_NARROW_LINES=to_braille(IMAGE_LOGO_NARROW,29,15)
+def compressed_logo(mode,width,height):
+    figure=IMAGE_WIDE_LINES if mode=='half' else IMAGE_NARROW_LINES
+    fw=len(figure[0])
+    ox=max(0,(width-fw)//2)
+    oy=max(0,(height-len(figure))//2)
+    crop_top=max(0,(len(figure)-height+1)//2)
+    rng=random.SystemRandom()
+    out=[]
+    for y in range(height):
+        fy=y-oy+crop_top
+        line=figure[fy] if 0<=fy<len(figure) else ''
+        positions=[i for i,c in enumerate(line) if c!=' ']
+        left=min(positions) if positions else None
+        right=max(positions) if positions else None
+        pieces=[]
+        last_rgb=None
+        for x in range(width):
+            fx=x-ox
+            char=line[fx] if 0<=fx<len(line) else ' '
+            rgb=None
+            if char!=' ':
+                rgb=grad(fy/max(1,len(figure)-1)*.78+max(0,fx)/max(1,fw)*.22)
+            elif not (left is not None and left-2<=fx<=right+2) and rng.random()<.064:
+                char=rng.choice(['.','.','.','*'])
+                rgb=FAINT
+            if USE_COLOR and last_rgb!=rgb:
+                pieces.append(color(rgb) if rgb else reset())
+                last_rgb=rgb
+            pieces.append(char)
+        out.append(''.join(pieces)+(reset() if USE_COLOR else ''))
+    return out
+
+def compact_notice(pretty, cols):
+    inside=min(79,max(26,cols-2))
+    heading="─ Vesly Cloud Labs "
+    header=p("╭"+heading+"─"*max(0,inside-len(heading))+"╮",LAV)
+    bottom=p("╰"+"─"*inside+"╯",LAV)
+    def body(s):
+        return p("│ ",LAV)+padded(s,inside-2)+p(" │",LAV)
+    return [
+        header,
+        body(p(short(pretty,max(8,inside-27)),PINK)+p(" · Private Cloud",FAINT)),
+        body(p("security@vesly.dev",PINK)),
+        bottom,
+    ]
+
+
+def compact_main():
+    cols,terminal_rows=shutil.get_terminal_size(fallback=(140,30))
+    if sys.stdout.isatty() and not opts.no_clear:
+        sys.stdout.write("\033[2J\033[H")
+    # Prefer full-resolution art when there is enough horizontal room,
+    # regardless of whether the SSH terminal reports only 24 rows.
+    if cols>=99:
+        art_mode,art_width="half",min(62,cols-54)
+    elif cols>=75:
+        art_mode,art_width="braille",31
+    else:
+        art_mode,art_width=None,0
+    gap=2
+    right_width=cols-art_width-gap if art_mode else cols
+    text,pretty=compact_info(min(52,right_width))
+    banner=compact_notice(pretty,cols)
+    output=list(banner)
+    if art_mode:
+        full_art_height=(len(LOGO)+1)//2 if art_mode=="half" else (len(LOGO)+3)//4
+        height=max(len(text), min(full_art_height, max(1,terminal_rows-5)))
+        art=compressed_logo(art_mode,art_width,height)
+        for i in range(height):
+            left=art[i] if i<len(art) else ""
+            right=text[i] if i<len(text) else ""
+            output.append(padded(left,art_width)+" "*gap+right)
+    else:
+        output+=text
+    sys.stdout.write("\n".join(output)+"\n")
+
+
+def username_host():
+    return getpass.getuser()+"@"+socket.gethostname()
+
+
+if __name__=="__main__":
+    try: main() if opts.full else compact_main()
+    except BrokenPipeError: pass
+

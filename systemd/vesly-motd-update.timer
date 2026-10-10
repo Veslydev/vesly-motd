@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for Vesly Cloud Labs MOTD updates daily
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=1h
+Unit=vesly-motd-update.service
+
+[Install]
+WantedBy=timers.target
