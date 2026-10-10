@@ -5,7 +5,7 @@ set -Eeuo pipefail
 SOURCE_DIR="${1:?Pass shell/ source path}"
 STATE=/etc/vesly-shell
 TRACKED=/var/lib/vesly-motd
-for filename in install.sh uninstall.sh activate.zsh bash-switch.sh desktop.toml mobile.toml stats.py; do
+for filename in install.sh uninstall.sh activate.zsh bash-switch.sh desktop.toml mobile.toml mobile-compact.toml stats.py; do
     [[ -f "$SOURCE_DIR/$filename" ]] || { echo "[vesly-shell] Missing $filename" >&2; exit 1; }
 done
 [[ -f /etc/os-release ]] && . /etc/os-release
@@ -24,11 +24,17 @@ bash -n "$SOURCE_DIR/uninstall.sh"
 sh -n "$SOURCE_DIR/bash-switch.sh"
 zsh -n "$SOURCE_DIR/activate.zsh"
 python3 -m py_compile "$SOURCE_DIR/stats.py"
-for filename in desktop.toml mobile.toml stats.py; do
-    STARSHIP_CONFIG="$SOURCE_DIR/$filename" "$STATE/starship" prompt --status=0 --path=/ >/dev/null 2>&1 ||
-        { echo "[vesly-shell] Invalid Starship config: $filename" >&2; exit 1; }
+for filename in desktop.toml mobile.toml mobile-compact.toml; do
+    errors=$(mktemp)
+    if ! STARSHIP_CONFIG="$SOURCE_DIR/$filename" "$STATE/starship" prompt --status=0 --path=/ >/dev/null 2>"$errors" || [[ -s "$errors" ]]; then
+        cat "$errors" >&2
+        rm -f "$errors"
+        echo "[vesly-shell] Invalid Starship config: $filename" >&2
+        exit 1
+    fi
+    rm -f "$errors"
 done
-for filename in install.sh uninstall.sh activate.zsh bash-switch.sh desktop.toml mobile.toml stats.py; do
+for filename in install.sh uninstall.sh activate.zsh bash-switch.sh desktop.toml mobile.toml mobile-compact.toml stats.py; do
     if [[ ! -f "$STATE/$filename" ]] || ! cmp -s "$SOURCE_DIR/$filename" "$STATE/$filename"; then
         [[ ! -f "$STATE/$filename" ]] || cp -p "$STATE/$filename" "$STATE/$filename.previous"
         new="$STATE/.$filename.$$"

@@ -1,0 +1,37 @@
+# Vesly Velvet · ultra-narrow mobile fallback (<55 columns)
+# Unicode arcs rather than Private Use Powerline glyphs for font-safe terminals.
+add_newline = false
+scan_timeout = 20
+palette = "velvet"
+format = "[◖](fg:base)[ ◈ ](fg:lavender bg:base)[◗](fg:base bg:path)$directory[◗](fg:path bg:git)$hostname$git_branch[◗](fg:git bg:heart)[ ♡ ](fg:lavender bg:heart)[◗](fg:heart)$character"
+
+[palettes.velvet]
+base = "#100718"
+path = "#271349"
+git = "#4A2468"
+heart = "#7D42F6"
+lavender = "#F0DDFF"
+soft = "#D19CFF"
+error = "#FF799D"
+
+[directory]
+style = "fg:lavender bg:path"
+truncation_length = 1
+truncate_to_repo = true
+format = "[ $path ]($style)"
+
+[hostname]
+ssh_only = false
+style = "fg:lavender bg:git"
+format = "[ $hostname]($style)"
+
+[git_branch]
+symbol = ""
+style = "fg:soft bg:git"
+truncation_length = 6
+truncation_symbol = "…"
+format = "[ ·$branch]($style)"
+
+[character]
+success_symbol = "[ ❯](bold soft) "
+error_symbol = "[ ❯](bold error) "

@@ -13,7 +13,9 @@ fi
 setopt HIST_IGNORE_SPACE HIST_IGNORE_DUPS 2>/dev/null
 
 _vesly_theme_size() {
-  if (( COLUMNS < 90 )); then
+  if (( COLUMNS < 55 )); then
+    export STARSHIP_CONFIG=/etc/vesly-shell/mobile-compact.toml
+  elif (( COLUMNS < 90 )); then
     export STARSHIP_CONFIG=/etc/vesly-shell/mobile.toml
   else
     export STARSHIP_CONFIG=/etc/vesly-shell/desktop.toml

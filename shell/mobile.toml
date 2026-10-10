@@ -1,27 +1,79 @@
-# Vesly Cloud Labs | Compact Wholespace for Termius & narrow terminals.
-# Plain Unicode wedges (not Powerline Private Use glyphs): works without patched fonts.
+# Vesly Cloud Labs · Velvet-inspired responsive mobile Starship prompt
+# Single row of continuous rounded Powerline segments. Requires Powerline glyph support
+# (U+E0B6/U+E0B4) in Termius's font for perfect curved joins.
+# The desktop Wholespace style is unchanged.
 add_newline = false
-palette = "vesly"
-format = "$hostname$directory$git_branch$character"
+scan_timeout = 25
+command_timeout = 700
+palette = "velvet"
+format = """
+[](fg:base)\
+[ ◈ ](fg:lavender bg:base)\
+[](fg:base bg:path)\
+$directory\
+[](fg:path bg:git)\
+$hostname\
+$git_branch\
+$git_status\
+[](fg:git bg:timer)\
+$cmd_duration\
+$time\
+[](fg:timer bg:heart)\
+$status\
+[ ♡ ](fg:lavender bg:heart)\
+[](fg:heart)\
+$character"""
 
-[palettes.vesly]
-ink = "#211330"
+[palettes.velvet]
+base = "#100718"
+path = "#271349"
+git = "#4A2468"
+timer = "#68317F"
+heart = "#7D42F6"
+lavender = "#F0DDFF"
 soft = "#D19CFF"
-dark = "#7D42F6"
-error = "#FF749E"
+error = "#FF799D"
+
+[directory]
+style = "fg:lavender bg:path"
+truncation_length = 2
+truncate_to_repo = true
+truncation_symbol = "…/"
+format = "[ $path ]($style)"
 
 [hostname]
 ssh_only = false
-format = "[◀](fg:soft)[ $hostname ](fg:ink bg:soft)[▶](fg:soft)"
-
-[directory]
-truncation_length = 1
-truncate_to_repo = true
-format = "[ ⌁ $path](bold soft)"
+style = "fg:lavender bg:git"
+format = "[ $hostname]($style)"
 
 [git_branch]
-format = "[ · $branch](fg:dark)"
+symbol = ""
+style = "fg:soft bg:git"
+truncation_length = 14
+truncation_symbol = "…"
+format = "[ ·$branch]($style)"
+
+[git_status]
+style = "fg:soft bg:git"
+format = "[ $all_status$ahead_behind]($style)"
+disabled = false
+
+[cmd_duration]
+min_time = 1500
+style = "fg:lavender bg:timer"
+format = "[ $duration](fg:lavender bg:timer)"
+
+[time]
+disabled = false
+time_format = "%H:%M"
+style = "fg:lavender bg:timer"
+format = "[ $time ]($style)"
+
+[status]
+disabled = false
+style = "fg:error bg:heart"
+format = "[ $status]($style)"
 
 [character]
-success_symbol = "[ ❯](bold dark) "
+success_symbol = "[ ❯](bold soft) "
 error_symbol = "[ ❯](bold error) "
