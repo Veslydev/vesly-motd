@@ -36,6 +36,18 @@ class RendererTest(unittest.TestCase):
                 self.assertNotIn(" ·  ready", data)
                 self.assertNotIn(" / dev", data)
 
+    def test_mobile_logo_and_readable_fields(self):
+        import re
+        for cols in (50, 52, 58, 60, 64, 70, 74):
+            with self.subTest(cols=cols):
+                output = render(cols, 24)
+                self.assertIn("⣴⣦⡀", output)
+                for key in ("CPU", "Disk /", "Network"):
+                    rows = [line for line in output.splitlines()
+                            if re.search(r"(?<![A-Za-z])" + re.escape(key) + r"\s{2,}", line)]
+                    self.assertEqual(len(rows), 1)
+                    self.assertNotIn("…", rows[0])
+
     def test_wide_logo_on_24_row_tty(self):
         for cols in [99, 100, 112, 140]:
             with self.subTest(cols=cols):

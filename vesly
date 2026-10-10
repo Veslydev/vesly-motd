@@ -364,12 +364,23 @@ def compact_info(width):
         rows.append(p(("%-"+str(key_width)+"s")%key,LAV)+p(short(str(val),max(1,width-key_width)),rgb))
     def bar(title,used,total):
         text=(sized(used)+" / "+sized(total)) if total else "disabled"
+        if title.startswith("Disk") and width<=36 and total:
+            # Compact mobile view: avoid truncating the disk capacity.
+            unit,scale=("TiB",1024**4) if total>=1024**4 else (("GiB",1024**3) if total>=1024**3 else ("MiB",1024**2))
+            text=f"{used/scale:.1f} / {total/scale:.1f} {unit}"
         value(title,text)
         rows.append(compact_graph(used,total,min(27,max(12,width-9))))
     rows.append(p(short(username+"@"+hostname,width),PINK))
     value("OS",distro)
     value("Node",pretty+"   Up "+get_uptime())
     value("Kernel",platform.release())
+    if width<=48:
+        # Keep the model recognizable instead of showing a cut-off CPU name.
+        if "Core Processor (Haswell" in cpu_name:
+            cpu_name="Intel Haswell"+((" (no TSX)" if width>=32 else " noTSX") if "no TSX" in cpu_name else "")
+        else:
+            cpu_name=re.sub(r"\d+-Core Processor","",cpu_name)
+            cpu_name=re.sub(r"\s+Processor","",cpu_name).strip()
     value("CPU",cpu_name)
     value("Compute",f"{os.cpu_count() or 1} vCPU · {measure_cpu()}% · L {loads[0]:.2f}")
     value("Runtime",f"{len([x for x in os.listdir('/proc') if x.isdigit()])} procs · {call('systemd-detect-virt') or 'host'}")
@@ -379,7 +390,8 @@ def compact_info(width):
         bar("Disk "+short(diskpath,5),used,total)
     value("Local IP",ip,CYAN)
     value("Tailscale",tail_ip,CYAN)
-    value("Network",dev+" · SSH "+peer)
+    network=(dev+" "+peer) if width<=36 else (dev+" · SSH "+peer)
+    value("Network",network)
     value("Packages",str(pkg_count)+" · shell "+os.path.basename(os.environ.get("SHELL","unknown")))
     value("Time",now.strftime("%H:%M:%S")+" "+str(now.tzname()))
     rows.append("  "+"".join(p("━━",c) for c in (GREY,PURPLE_DARK,(145,85,248),LAV,PURPLE_LIGHT,(192,140,254),PURPLE_DARK,WHITE)))
@@ -419,11 +431,46 @@ def to_full_logo():
 LOGO=to_full_logo()
 IMAGE_WIDE_LINES=to_braille(IMAGE_LOGO_WIDE,45,20)
 IMAGE_NARROW_LINES=to_braille(IMAGE_LOGO_NARROW,29,15)
+
+def miniature_logo(target_cols=18,target_rows=11):
+    """Resample the embedded Vesly logo into a tiny Braille silhouette."""
+    sw,sh=58,60
+    tw,th=target_cols*2,target_rows*4
+    pixels=decode_pixels(IMAGE_LOGO_NARROW,sw*sh)
+    samples=bytearray(tw*th)
+    for y in range(th):
+        for x in range(tw):
+            total=0
+            for dy in (-.27,0,.27):
+                sy=min(sh-1,max(0,int((y+.5+dy)*sh/th)))
+                for dx in (-.27,0,.27):
+                    sx=min(sw-1,max(0,int((x+.5+dx)*sw/tw)))
+                    total+=bool(pixels[sy*sw+sx])
+            samples[y*tw+x]=total>=3
+    dots=((0,0,1),(0,1,2),(0,2,4),(0,3,64),
+          (1,0,8),(1,1,16),(1,2,32),(1,3,128))
+    lines=[]
+    for y in range(target_rows):
+        row=[]
+        for x in range(target_cols):
+            value=0
+            for dx,dy,bit in dots:
+                if samples[(y*4+dy)*tw+(x*2+dx)]:
+                    value|=bit
+            row.append(chr(0x2800+value) if value else ' ')
+        lines.append(''.join(row))
+    return lines
+
+IMAGE_MINI_LINES=miniature_logo()
+IMAGE_MICRO_LINES=miniature_logo(12,8)
+
 def compressed_logo(mode,width,height):
-    figure=IMAGE_WIDE_LINES if mode=='half' else IMAGE_NARROW_LINES
+    figure={'half':IMAGE_WIDE_LINES,'braille':IMAGE_NARROW_LINES,'mini':IMAGE_MINI_LINES,'micro':IMAGE_MICRO_LINES}[mode]
     fw=len(figure[0])
     ox=max(0,(width-fw)//2)
     oy=max(0,(height-len(figure))//2)
+    if mode in ("mini","micro"):
+        oy=min(2,oy)
     crop_top=max(0,(len(figure)-height+1)//2)
     rng=random.SystemRandom()
     out=[]
@@ -476,6 +523,10 @@ def compact_main():
         art_mode,art_width="half",min(62,cols-54)
     elif cols>=75:
         art_mode,art_width="braille",31
+    elif cols>=50:
+        art_mode,art_width="mini",18
+    elif cols>=44:
+        art_mode,art_width="micro",12
     else:
         art_mode,art_width=None,0
     gap=2
@@ -484,7 +535,7 @@ def compact_main():
     banner=compact_notice(pretty,cols)
     output=list(banner)
     if art_mode:
-        full_art_height=(len(LOGO)+1)//2 if art_mode=="half" else (len(LOGO)+3)//4
+        full_art_height={"half":20,"braille":15,"mini":11,"micro":8}[art_mode]
         height=max(len(text), min(full_art_height, max(1,terminal_rows-5)))
         art=compressed_logo(art_mode,art_width,height)
         for i in range(height):
