@@ -5,7 +5,7 @@ set -Eeuo pipefail
 SOURCE_DIR="${1:?Pass shell/ source path}"
 STATE=/etc/vesly-shell
 TRACKED=/var/lib/vesly-motd
-for filename in install.sh uninstall.sh activate.zsh bash-switch.sh desktop.toml mobile.toml; do
+for filename in install.sh uninstall.sh activate.zsh bash-switch.sh desktop.toml mobile.toml stats.py; do
     [[ -f "$SOURCE_DIR/$filename" ]] || { echo "[vesly-shell] Missing $filename" >&2; exit 1; }
 done
 [[ -f /etc/os-release ]] && . /etc/os-release
@@ -23,16 +23,17 @@ bash -n "$SOURCE_DIR/install.sh"
 bash -n "$SOURCE_DIR/uninstall.sh"
 sh -n "$SOURCE_DIR/bash-switch.sh"
 zsh -n "$SOURCE_DIR/activate.zsh"
-for filename in desktop.toml mobile.toml; do
+python3 -m py_compile "$SOURCE_DIR/stats.py"
+for filename in desktop.toml mobile.toml stats.py; do
     STARSHIP_CONFIG="$SOURCE_DIR/$filename" "$STATE/starship" prompt --status=0 --path=/ >/dev/null 2>&1 ||
         { echo "[vesly-shell] Invalid Starship config: $filename" >&2; exit 1; }
 done
-for filename in install.sh uninstall.sh activate.zsh bash-switch.sh desktop.toml mobile.toml; do
+for filename in install.sh uninstall.sh activate.zsh bash-switch.sh desktop.toml mobile.toml stats.py; do
     if [[ ! -f "$STATE/$filename" ]] || ! cmp -s "$SOURCE_DIR/$filename" "$STATE/$filename"; then
         [[ ! -f "$STATE/$filename" ]] || cp -p "$STATE/$filename" "$STATE/$filename.previous"
         new="$STATE/.$filename.$$"
         install -m 0644 "$SOURCE_DIR/$filename" "$new"
-        if [[ "$filename" == install.sh || "$filename" == uninstall.sh ]]; then chmod 0755 "$new"; fi
+        if [[ "$filename" == install.sh || "$filename" == uninstall.sh || "$filename" == stats.py ]]; then chmod 0755 "$new"; fi
         mv -f "$new" "$STATE/$filename"
         echo "[vesly-shell] Updated $filename"
     fi

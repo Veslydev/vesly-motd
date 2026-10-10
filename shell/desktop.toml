@@ -1,14 +1,19 @@
-# Vesly Cloud Labs · Wholespace-inspired Starship
-# Filled capsules, right-aligned Git + time, dedicated command line.
+# Vesly Cloud Labs | Wholespace / Powerline-inspired
+# Standard Powerline glyphs U+E0B0/U+E0B2 require a Powerline-capable terminal font.
+# Left: system + metrics + duration. Right: toolchain + git + clock.
+# Below: a clean directory & input line, just like Wholespace.
 add_newline = false
-command_timeout = 800
-scan_timeout = 25
 palette = "vesly"
+scan_timeout = 30
+command_timeout = 600
 format = """
-[╭─](bold bright)\
-[ $os ](fg:ink bg:light)\
-[ $username$hostname ](fg:light bg:dark)\
-[ $memory_usage ](fg:light bg:mid)\
+[](fg:cream)\
+[ ◈ ](fg:ink bg:cream)\
+[](fg:soft bg:cream)\
+[ ♡ ](fg:ink bg:soft)\
+[](fg:dark bg:soft)\
+${custom.metrics}\
+[](fg:dark)\
 $cmd_duration\
 $fill\
 $nodejs\
@@ -16,74 +21,56 @@ $git_branch\
 $git_status\
 $time\
 $line_break\
-[╰─](bold bright)$directory$character"""
-right_format = ""
+$directory\
+$character"""
 
 [palettes.vesly]
-dark = "#7D42F6"
-mid = "#9567ED"
-light = "#D19CFF"
-bright = "#B685FF"
 ink = "#211330"
-muted = "#a692c5"
-error = "#F28DBC"
+cream = "#F5E9FF"
+soft = "#D19CFF"
+dark = "#7D42F6"
+mid = "#9867EB"
+dim = "#52505C"
+silver = "#E7D9F8"
+error = "#FF749E"
 
-[os]
-disabled = false
-format = "LINUX"
-# Starship os module supports symbols, not the platform-dependent Wholespace glyphs.
-[os.symbols]
-Ubuntu = "Ubuntu"
-Debian = "Debian"
-NixOS = "NixOS"
-Linux = "Linux"
-
-[username]
-show_always = true
-format = "[$user]($style)"
-style_user = "fg:light bg:dark"
-style_root = "fg:light bg:dark"
-
-[hostname]
-ssh_only = false
-format = "[@$hostname]($style)"
-style = "fg:light bg:dark"
-
-[memory_usage]
-disabled = false
-threshold = 0
-format = "[ RAM $ram_pct ](fg:light bg:mid)"
+[custom.metrics]
+when = "test -r /proc/stat && command -v python3 >/dev/null"
+command = "python3 /etc/vesly-shell/stats.py"
+format = "[ $output ](fg:cream bg:dark)"
+shell = ["sh"]
 
 [cmd_duration]
-min_time = 1000
-format = "[ $duration ](fg:light bg:mid)"
+min_time = 100
+format = "[](fg:dim)[ $duration ](fg:silver bg:dim)[](fg:dim)"
 
 [fill]
 symbol = " "
 
+[nodejs]
+format = "[](fg:cream)[ node $version ](fg:ink bg:cream)"
+detect_extensions = ["js","mjs","cjs","ts","mts","cts"]
+detect_files = ["package.json",".node-version"]
+
 [git_branch]
 symbol = ""
-format = "[ $branch ](fg:ink bg:light)"
+format = "[](fg:soft)[ $branch ](fg:ink bg:soft)"
 
 [git_status]
-format = "[ $all_status$ahead_behind ](fg:ink bg:light)"
+format = "[ $all_status$ahead_behind ](fg:ink bg:soft)"
 disabled = false
-
-[nodejs]
-symbol = "node "
-format = "[ $symbol$version ](fg:light bg:dark)"
 
 [time]
 disabled = false
 time_format = "%H:%M"
-format = "[ $time ](fg:ink bg:light)"
+format = "[](fg:cream)[ $time ](fg:ink bg:cream)[](fg:cream)"
 
 [directory]
-style = "bold light"
-truncation_length = 3
+style = "bold soft"
+truncation_length = 4
 truncate_to_repo = true
-format = "[ $path ]($style)"
+format = "[⌁ $path]($style)"
 
 [character]
-success_symbol = "[❯](bold dark) "
-error_symbol = "[❯](bold error) "
+success_symbol = "[ ♡](bold dark)[ ❯](bold soft) "
+error_symbol = "[ ✗](bold error)[ ❯](bold error) "

@@ -1,28 +1,26 @@
-# Vesly Cloud Labs · Wholespace-mobile
-# Compact capsules; no right alignment so Termius never wraps.
+# Vesly Cloud Labs | Compact Wholespace for Termius & narrow terminals.
+# Plain Unicode wedges (not Powerline Private Use glyphs): works without patched fonts.
 add_newline = false
 palette = "vesly"
 format = "$hostname$directory$git_branch$character"
 
 [palettes.vesly]
-dark = "#7D42F6"
-light = "#D19CFF"
 ink = "#211330"
-error = "#F28DBC"
+soft = "#D19CFF"
+dark = "#7D42F6"
+error = "#FF749E"
 
 [hostname]
 ssh_only = false
-style = "fg:ink bg:light"
-format = "[ $hostname ]($style)"
+format = "[◀](fg:soft)[ $hostname ](fg:ink bg:soft)[▶](fg:soft)"
 
 [directory]
 truncation_length = 1
 truncate_to_repo = true
-style = "fg:light bg:dark"
-format = "[ $path ]($style)"
+format = "[ ⌁ $path](bold soft)"
 
 [git_branch]
-format = "[ $branch ](fg:ink bg:light)"
+format = "[ · $branch](fg:dark)"
 
 [character]
 success_symbol = "[ ❯](bold dark) "

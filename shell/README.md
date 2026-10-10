@@ -12,3 +12,7 @@ This folder is part of Veslydev/vesly-motd. It is installed and updated automati
 sudo vesly-update also installs the shell on nodes that previously had only the MOTD. Daily updates synchronize the renderer, shell theme and updater. Changes to installer requirements may install packages, but no account login shell or sshd configuration is changed.
 
 Set VESLY_INSTALL_SHELL=0 to opt out when running the parent installer. VESLY_SHELL_NO_AUTO=1 disables Bash-to-Zsh handoff within a session.
+
+## Wholespace-inspired design
+
+The desktop prompt uses purple Powerline wedges, a system/heart capsule, real sampled CPU and RAM values, a right-aligned time and Git details, plus a separate path/command line. For correct desktop wedge glyphs, select a Powerline/Nerd Font in your SSH terminal. Termius mobile uses basic Unicode wedge characters to avoid unsupported Private Use characters. The statistics script samples Linux /proc/stat for approximately 70 ms; all other theme features run normally without it.
