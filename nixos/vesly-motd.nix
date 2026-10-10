@@ -14,6 +14,7 @@ let
   '';
 in
 {
+  imports = [ ./vesly-shell.nix ];
   environment.systemPackages = [
     pkgs.git pkgs.python3
     (pkgs.writeShellScriptBin "vesly" ''

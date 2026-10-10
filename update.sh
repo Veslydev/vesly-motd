@@ -1,5 +1,5 @@
 #!/bin/sh
-# Vesly Cloud Labs MOTD: renderer-only updater from public GitHub.
+# Vesly Cloud Labs MOTD + shell updater from GitHub.
 set -eu
 say() { printf '%s\n' "[vesly-update] $*"; }
 fail() { say "ERROR: $*" >&2; exit 1; }
@@ -22,6 +22,17 @@ TMP=$(mktemp -d "$STATE/.staging.XXXXXXXX")
 # HTTPS enforces origin validation; never disable certificate verification.
 git -c advice.detachedHead=false clone -q --depth 1 --single-branch --branch main "$SOURCE" "$TMP/repo" || fail 'GitHub fetch failed; current version preserved.'
 [ -f "$TMP/repo/vesly" ] && [ -f "$TMP/repo/update.sh" ] || fail 'Unexpected repository structure.'
+# Existing MOTD-only nodes receive the shell automatically on the next update.
+# Explicit opt-out persists across scheduled checks.
+if [ ! -f "$STATE/.shell-opt-out" ]; then
+    [ -f "$TMP/repo/shell/upgrade.sh" ] || fail 'Missing shell module.'
+    command -v bash >/dev/null 2>&1 || fail 'bash is required to install the shell.'
+    bash "$TMP/repo/shell/upgrade.sh" "$TMP/repo/shell" ||
+        fail 'Shell update failed; existing renderer remains intact.'
+else
+    say 'Skipping shell due to explicit opt-out.'
+fi
+
 python3 -m py_compile "$TMP/repo/vesly" || fail 'Downloaded renderer failed syntax check.'
 COMMIT=$(git -C "$TMP/repo" rev-parse HEAD)
 OLD=none
@@ -35,7 +46,7 @@ else
     mv -f "$STATE/.vesly.next.$$" "$STATE/vesly"
     say "Updated renderer to $COMMIT."
 fi
-# Updating this utility does not rerun the installer or change SSH/PAM settings.
+# Background updates do not change sshd, PAM, users login shells or SSH keys.
 sh -n "$TMP/repo/update.sh" || fail 'Downloaded updater shell validation failed.'
 install -m 0755 "$TMP/repo/update.sh" "$STATE/.update.next.$$"
 mv -f "$STATE/.update.next.$$" "$STATE/update.sh"

@@ -1,0 +1,89 @@
+# Vesly Cloud Labs · Wholespace-inspired Starship
+# Filled capsules, right-aligned Git + time, dedicated command line.
+add_newline = false
+command_timeout = 800
+scan_timeout = 25
+palette = "vesly"
+format = """
+[╭─](bold bright)\
+[ $os ](fg:ink bg:light)\
+[ $username$hostname ](fg:light bg:dark)\
+[ $memory_usage ](fg:light bg:mid)\
+$cmd_duration\
+$fill\
+$nodejs\
+$git_branch\
+$git_status\
+$time\
+$line_break\
+[╰─](bold bright)$directory$character"""
+right_format = ""
+
+[palettes.vesly]
+dark = "#7D42F6"
+mid = "#9567ED"
+light = "#D19CFF"
+bright = "#B685FF"
+ink = "#211330"
+muted = "#a692c5"
+error = "#F28DBC"
+
+[os]
+disabled = false
+format = "LINUX"
+# Starship os module supports symbols, not the platform-dependent Wholespace glyphs.
+[os.symbols]
+Ubuntu = "Ubuntu"
+Debian = "Debian"
+NixOS = "NixOS"
+Linux = "Linux"
+
+[username]
+show_always = true
+format = "[$user]($style)"
+style_user = "fg:light bg:dark"
+style_root = "fg:light bg:dark"
+
+[hostname]
+ssh_only = false
+format = "[@$hostname]($style)"
+style = "fg:light bg:dark"
+
+[memory_usage]
+disabled = false
+threshold = 0
+format = "[ RAM $ram_pct ](fg:light bg:mid)"
+
+[cmd_duration]
+min_time = 1000
+format = "[ $duration ](fg:light bg:mid)"
+
+[fill]
+symbol = " "
+
+[git_branch]
+symbol = ""
+format = "[ $branch ](fg:ink bg:light)"
+
+[git_status]
+format = "[ $all_status$ahead_behind ](fg:ink bg:light)"
+disabled = false
+
+[nodejs]
+symbol = "node "
+format = "[ $symbol$version ](fg:light bg:dark)"
+
+[time]
+disabled = false
+time_format = "%H:%M"
+format = "[ $time ](fg:ink bg:light)"
+
+[directory]
+style = "bold light"
+truncation_length = 3
+truncate_to_repo = true
+format = "[ $path ]($style)"
+
+[character]
+success_symbol = "[❯](bold dark) "
+error_symbol = "[❯](bold error) "

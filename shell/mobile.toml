@@ -1,0 +1,29 @@
+# Vesly Cloud Labs · Wholespace-mobile
+# Compact capsules; no right alignment so Termius never wraps.
+add_newline = false
+palette = "vesly"
+format = "$hostname$directory$git_branch$character"
+
+[palettes.vesly]
+dark = "#7D42F6"
+light = "#D19CFF"
+ink = "#211330"
+error = "#F28DBC"
+
+[hostname]
+ssh_only = false
+style = "fg:ink bg:light"
+format = "[ $hostname ]($style)"
+
+[directory]
+truncation_length = 1
+truncate_to_repo = true
+style = "fg:light bg:dark"
+format = "[ $path ]($style)"
+
+[git_branch]
+format = "[ $branch ](fg:ink bg:light)"
+
+[character]
+success_symbol = "[ ❯](bold dark) "
+error_symbol = "[ ❯](bold error) "

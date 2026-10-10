@@ -21,7 +21,7 @@ if [ "$ID" = nixos ]; then
     install -m 0755 "$BASE/vesly" "$DEST/vesly"
     install -m 0755 "$BASE/uninstall.sh" "$DEST/uninstall.sh"
     install -m 0755 "$BASE/update.sh" "$DEST/update.sh"
-    say 'Renderer and updater installed. NixOS: import nixos/vesly-motd.nix, then nixos-rebuild switch.'
+    say 'Renderer and updater installed. NixOS: import nixos/vesly-motd.nix (includes Zsh/Starship), then nixos-rebuild switch.'
     say 'No changes to PAM, SSH, or shell configuration were made.'
     exit 0
 fi
@@ -149,6 +149,17 @@ else
     say 'Auto-update timer not enabled (systemd unavailable or VESLY_AUTO_UPDATE=0).'
 fi
 
+# The same installer configures Zsh, Starship and the MOTD.
+if [ "${VESLY_INSTALL_SHELL:-1}" = 0 ]; then
+    : > "$STATE/.shell-opt-out"
+    rm -f "$STATE/.shell-installed"
+    say 'Shell module disabled by VESLY_INSTALL_SHELL=0.'
+else
+    rm -f "$STATE/.shell-opt-out"
+    [ -f "$BASE/shell/upgrade.sh" ] || fatal 'Missing integrated shell module.'
+    command -v bash >/dev/null 2>&1 || fatal 'bash is needed to provision Zsh.'
+    bash "$BASE/shell/upgrade.sh" "$BASE/shell" || fatal 'Shell module installation failed.'
+fi
 say 'Installed. Interactive SSH only, for all Bash/Zsh/Fish users.'
 say 'Original MOTD and modified shell configs are backed up in /var/lib/vesly-motd/backups.'
 say 'Existing SSH sessions remain untouched. Reconnect to verify.'

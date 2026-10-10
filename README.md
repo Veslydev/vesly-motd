@@ -17,7 +17,9 @@ A purple gradient SSH welcome screen with an image-derived logo, stars and live 
 sudo apt-get update && sudo apt-get install -y git python3 && VESLY_DIR=$(mktemp -d) && git clone --depth 1 https://github.com/Veslydev/vesly-motd.git "$VESLY_DIR/vesly-motd" && sudo sh "$VESLY_DIR/vesly-motd/install.sh"
 ~~~
 
-Reconnect with a new interactive SSH TTY to view the new MOTD.
+Reconnect with an interactive SSH TTY to see the MOTD and the Starship prompt. Existing MOTD nodes can run sudo vesly-update to add the shell automatically; no other installer is needed.
+
+MOTD only opt-out: run the parent installer with VESLY_INSTALL_SHELL=0, or create /var/lib/vesly-motd/.shell-opt-out to prevent the scheduled updater from adding the shell.
 
 ### Update / remove
 
@@ -44,7 +46,7 @@ Add the following to /etc/nixos/configuration.nix:
 imports = [ ./vesly-motd/nixos/vesly-motd.nix ];
 ~~~
 
-Then run sudo nixos-rebuild switch. The module declares interactive Bash/Zsh/Fish hooks and a systemd update timer. On NixOS the updater refreshes only the renderer; it does not rebuild system config. Any PAM-generated MOTD should be disabled using nixpkgs options for your version. NixOS rebuild has not yet been tested on a live machine.
+Then run sudo nixos-rebuild switch. The NixOS module includes declarative Zsh/Starship hooks and a systemd timer. On NixOS the updater refreshes only the renderer; it does not rebuild system config. Any PAM-generated MOTD should be disabled using nixpkgs options for your version. NixOS rebuild has not yet been tested on a live machine.
 
 ## Requirements and OS support
 

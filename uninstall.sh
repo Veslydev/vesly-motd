@@ -10,6 +10,17 @@ if [ "$ID" = nixos ]; then
     say 'Remove the vesly-motd.nix import from configuration.nix and run nixos-rebuild switch.'
     exit 0
 fi
+# Remove managed shell integration when installed through the same updater.
+if [ -f "$BASE/.shell-installed" ]; then
+    if [ -f /etc/vesly-shell/uninstall.sh ] && command -v bash >/dev/null 2>&1; then
+        bash /etc/vesly-shell/uninstall.sh
+    else
+        say 'Shell uninstall unavailable; configuration retained.'
+    fi
+    rm -f "$BASE/.shell-installed"
+fi
+rm -f "$BASE/.shell-opt-out"
+
 # Stop scheduling new updates before removing managed files.
 if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
     systemctl disable --now vesly-motd-update.timer 2>/dev/null || :
