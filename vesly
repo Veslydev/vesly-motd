@@ -379,8 +379,8 @@ def compact_info(width):
         if "Core Processor (Haswell" in cpu_name:
             cpu_name="Intel Haswell"+((" (no TSX)" if width>=32 else " noTSX") if "no TSX" in cpu_name else "")
         else:
-            cpu_name=re.sub(r"\d+-Core Processor","",cpu_name)
-            cpu_name=re.sub(r"\s+Processor","",cpu_name).strip()
+            cpu_name=re.sub(r"\b\d+-Core Processor\b","",cpu_name)
+            cpu_name=re.sub(r"\s+Processor\b","",cpu_name).strip()
     value("CPU",cpu_name)
     value("Compute",f"{os.cpu_count() or 1} vCPU · {measure_cpu()}% · L {loads[0]:.2f}")
     value("Runtime",f"{len([x for x in os.listdir('/proc') if x.isdigit()])} procs · {call('systemd-detect-virt') or 'host'}")
